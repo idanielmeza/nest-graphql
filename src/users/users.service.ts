@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { CreateUserInput } from './dto/create-user.input';
 import { UpdateUserInput } from './dto/update-user.input';
 import { SingupInput } from 'src/auth/dto/inputs/singup.input';
@@ -40,22 +40,59 @@ export class UsersService {
     if(roles){
       return this.userRepository.createQueryBuilder('user')
         .where('ARRAY[roles] && ARRAY[:...roles]', {roles})
+        .leftJoinAndSelect('user.lastUserUpdated', 'lastUserUpdated')
         .getMany();
     }
 
-    return this.userRepository.find()
+    return this.userRepository.find({relations: {lastUserUpdated: true}})
   }
 
   async findOne(id: string) : Promise<User | null> {
     return this.userRepository.findOneBy({id});
   }
 
-  update(id: number, updateUserInput: UpdateUserInput) {
-    return `This action updates a #${id} user`;
+  async update(id: string, updateUserInput: UpdateUserInput, loggedUser: User) {
+    
+    const user = await this.findOne(id);
+
+    if(!user) throw new NotFoundException('user not found');
+
+    for(const key of Object.keys(user)){
+
+        if(key === undefined || key === null || key === "id") continue;
+
+        if (updateUserInput.hasOwnProperty(key)) {
+
+            if(key === "password"){
+              user[key] = await argon2.hash(updateUserInput.password!);
+            }else
+              user[key] = updateUserInput[key];
+        }
+
+    }
+
+    user.lastUserUpdated = loggedUser;
+    user.lastUpdated = new Date();
+
+    await this.userRepository.save(user);
+
+    return user;
+
   }
 
-  remove(id: string) {
-    return `This action removes a #${id} user`;
+  async remove(id: string, loggedUser: User) {
+    const user = await this.findOne(id)
+
+    if(!user) throw new NotFoundException('user not found');
+
+    user.isActive = !user.isActive;
+    user.lastUserUpdated = loggedUser;
+    user.lastUpdated = new Date();
+
+    await this.userRepository.save(user);
+
+    return user;
+
   }
 
   findByEmail(email: string) : Promise<User | null> {

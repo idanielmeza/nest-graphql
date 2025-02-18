@@ -1,6 +1,6 @@
 import { ObjectType, Field, Int, ID } from '@nestjs/graphql';
 import { RolesEnum } from 'src/auth/enums/roles.enums';
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { BeforeUpdate, Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 
 @ObjectType()
 @Entity('users')
@@ -37,4 +37,19 @@ export class User {
   })
   isActive: boolean;
 
+
+  // lastUserUpdated
+  @ManyToOne(() => User, user => user.lastUserUpdated, {nullable: true})
+  @JoinColumn()
+  @Field(() => User, {nullable: true})
+  lastUserUpdated: User;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastUpdated: Date;
+
+
+  @BeforeUpdate()
+  updateTimestamp() {
+    this.lastUpdated = new Date();
+  }
 }
